@@ -1,8 +1,7 @@
 # Data management
-matplotlib
-pandas
 torch
 numpy
 
 # Reinforcement learning
 gymnasium
+gymnasium[mujoco] # Environment for reinforcement learning

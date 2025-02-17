@@ -12,7 +12,7 @@ make setup
 
 ## TODO LIST
 
-- [] Implement a method that apply the same seed for running experiments
-- [] Create SAC Agent with KAN at Value networks
-- [] Define the exact environments where the experiment will be ran at
-- [] Define the metrics to the paper
+- [ ] Implement a method that apply the same seed for running experiments
+- [ ] Create SAC Agent with KAN at Value networks
+- [ ] Define the exact environments where the experiment will be ran at
+- [ ] Define the metrics to the paper

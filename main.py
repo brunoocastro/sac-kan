@@ -1,7 +1,7 @@
 import gymnasium as gym
 import numpy as np
-from sac_torch import SACAgent
 
+from sac import SACAgent
 from utils import plot_learning_curve
 
 if __name__ == "__main__":
@@ -9,8 +9,8 @@ if __name__ == "__main__":
 
     agent = SACAgent(
         input_dims=env.observation_space.shape,
-        env=env,
         n_actions=env.action_space.shape[0],
+        max_action=env.action_space.high,
     )
 
     n_games = 10000
@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
     if load_checkpoint:
         agent.load_models()
-        # env.render()
+        env.render()
 
     for i in range(n_games):
         observation, info = env.reset()
