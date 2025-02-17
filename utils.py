@@ -16,7 +16,20 @@ def plot_learning_curve(x, scores, figure_file):
     print(f"Figure saved as {figure_file} with {running_avg_size} running average at {x[-1]} episodes")
 
 
-def create_folder_if_not_exists(folder):
-    if not os.path.exists(folder):
-        print(f"Folder {folder} does not exists. Creating now...")
-        os.makedirs(folder)
+def create_folder_if_not_exists(path):
+    """
+    Creates folders if they do not exist.
+    If a file path is provided, it creates the necessary folders for the file.
+    If a folder path is provided, it creates the folder and any necessary parent folders.
+    """
+    # Check if the path has a file extension
+    if os.path.splitext(path)[1]:
+        # It's a file path, so get the directory part
+        path = os.path.dirname(path)
+
+    # Create the directory if it does not exist
+    if not os.path.exists(path):
+        os.makedirs(path)
+        print(f"Created directory: {path}")
+    else:
+        print(f"Directory already exists: {path}")

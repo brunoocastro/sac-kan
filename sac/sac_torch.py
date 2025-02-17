@@ -9,10 +9,10 @@ from sac.networks import ActorNetwork, CriticNetwork, ValueNetwork
 class SACAgent:
     def __init__(
         self,
+        max_action,
         alpha=0.0003,
         beta=0.0003,
         input_dims=[8],
-        # env=None,
         gamma=0.99,
         n_actions=2,
         max_replay_buffer_size=1000000,
@@ -21,7 +21,6 @@ class SACAgent:
         layer2_size=256,
         batch_size=256,
         reward_scale=2,
-        max_action=None,
         checkpoint_dir="tmp/sac",
     ):
         self.gamma = gamma

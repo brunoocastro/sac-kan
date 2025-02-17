@@ -1,6 +1,7 @@
 # sac-kan
 
-A comparison between the standard implementation of Soft Actor Critic (using MLP) and a new one with KAN (Kolmogorov-Arnold Network)
+A comparison between the standard implementation of [Soft Actor Critic (using MLP)](https://arxiv.org/abs/1801.01290) and a new one with [KAN (Kolmogorov-Arnold Network)](https://github.com/mintisan/awesome-kan)
+
 
 ## Run Locally
 

@@ -2,7 +2,7 @@ import gymnasium as gym
 import numpy as np
 
 from sac import SACAgent
-from utils import plot_learning_curve
+from utils import create_folder_if_not_exists, plot_learning_curve
 
 if __name__ == "__main__":
     env = gym.make("InvertedPendulum-v5", render_mode="human")
@@ -13,7 +13,7 @@ if __name__ == "__main__":
         max_action=env.action_space.high,
     )
 
-    n_games = 10000
+    n_games = 100
     filename = "inverted_pendulum.png"
 
     figure_file = "plots/" + filename
@@ -28,7 +28,7 @@ if __name__ == "__main__":
         agent.load_models()
         env.render()
 
-    for i in range(n_games):
+    for i in range(n_games + 1):
         observation, info = env.reset()
         print(observation, info)
         done = False
@@ -58,5 +58,8 @@ if __name__ == "__main__":
             env.render()
 
     if not load_checkpoint:
+        create_folder_if_not_exists(figure_file)
         x = [i + 1 for i in range(n_games)]
         plot_learning_curve(x, score_history, figure_file)
+
+    env.close()
