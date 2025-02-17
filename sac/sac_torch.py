@@ -1,7 +1,6 @@
+import numpy as np
 import torch as T
 import torch.nn.functional as F
-import numpy as np
-
 from agents.new_sac.buffer import ReplayBuffer
 from agents.new_sac.networks import ActorNetwork, CriticNetwork, ValueNetwork
 
@@ -26,9 +25,7 @@ class SACAgent:
     ):
         self.gamma = gamma
         self.tau = tau
-        self.memory = ReplayBuffer(
-            max_size=max_replay_buffer_size, input_shape=input_dims, n_actions=n_actions
-        )
+        self.memory = ReplayBuffer(max_size=max_replay_buffer_size, input_shape=input_dims, n_actions=n_actions)
         self.batch_size = batch_size
         self.n_actions = n_actions
 
@@ -114,10 +111,7 @@ class SACAgent:
         value_state_dict = dict(value_params)
 
         for name in value_state_dict:
-            value_state_dict[name] = (
-                tau * value_state_dict[name].clone()
-                + (1 - tau) * target_value_dict[name].clone()
-            )
+            value_state_dict[name] = tau * value_state_dict[name].clone() + (1 - tau) * target_value_dict[name].clone()
 
         self.target_value.load_state_dict(value_state_dict)
 
@@ -141,16 +135,12 @@ class SACAgent:
         if self.memory.mem_cntr < self.batch_size:
             return
 
-        state, action, reward, new_state, done = self.memory.sample_buffer(
-            self.batch_size
-        )
+        state, action, reward, new_state, done = self.memory.sample_buffer(self.batch_size)
 
         # Transform into Pytorch Tensors - Do here to avoid ReplayBuffer to be linked to Pytorch, staying framework agnostic
         state = T.tensor(state, dtype=T.float).to(self.actor.device)
         action = T.tensor(action, dtype=T.float).to(self.actor.device)
-        reward = T.tensor(reward, dtype=T.float).to(
-            self.actor.device
-        )  # all network devices is the same
+        reward = T.tensor(reward, dtype=T.float).to(self.actor.device)  # all network devices is the same
         state_ = T.tensor(new_state, dtype=T.float).to(self.actor.device)
         done = T.tensor(done).to(self.actor.device)
 

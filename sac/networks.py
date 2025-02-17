@@ -1,21 +1,25 @@
 import os
 
 import torch as T
-import torch.nn.functional as F
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
-from sympy.physics.units import action
 from torch.distributions.normal import Normal
-import numpy as np
 
-def create_folder_if_not_exists(folder):
-    if not os.path.exists(folder):
-        print(f"Creating folder {folder} to save the rewards.")
-        os.makedirs(folder)
+from utils import create_folder_if_not_exists
 
 
 class CriticNetwork(nn.Module):
-    def __init__(self, beta, input_dims, n_actions, fc1_dims=256, fc2_dims=256, name="critic", checkpoint_dir='tmp/sac'):
+    def __init__(
+        self,
+        beta,
+        input_dims,
+        n_actions,
+        fc1_dims=256,
+        fc2_dims=256,
+        name="critic",
+        checkpoint_dir="tmp/sac",
+    ):
         super(CriticNetwork, self).__init__()
         self.input_dims = input_dims
         self.n_actions = n_actions
@@ -23,7 +27,7 @@ class CriticNetwork(nn.Module):
         self.fc2_dims = fc2_dims
         self.name = name
         self.checkpoint_dir = checkpoint_dir
-        self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_sac')
+        self.checkpoint_file = os.path.join(self.checkpoint_dir, name + "_sac")
 
         # Critic evaluates the state/action pair, so we add actions as input early - Review
         self.fc1 = nn.Linear(self.input_dims[0] + self.n_actions, self.fc1_dims)
@@ -32,11 +36,12 @@ class CriticNetwork(nn.Module):
         # Output layer - Defines the quality of the action
         self.q = nn.Linear(self.fc2_dims, 1)
 
-        # Optimize our parameters based on deviation (self.parameters of nn.Module base class) using defined beta (Learning Rate)
+        # Optimize our parameters based on deviation (self.parameters of nn.Module base class) using defined
+        # beta (Learning Rate)
         self.optimizer = optim.Adam(self.parameters(), lr=beta)
 
         # Take usage of a GPU if available
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
+        self.device = T.device("cuda:0" if T.cuda.is_available() else "cpu")
 
         # Send our network to GPU or CPU - depending on availability
         self.to(self.device)
@@ -44,10 +49,10 @@ class CriticNetwork(nn.Module):
     def forward(self, state, action):
 
         # First layer feedforward and activation
-        ## Action value starts being the nn feedforward of the concatenation of state and value (as we defined above)
-        ## Along the batch dimension (dim=1 - second one = fc1_dims)
+        # - Action value starts being the nn feedforward of the concatenation of state and value (as we defined above)
+        # - Along the batch dimension (dim=1 - second one = fc1_dims)
         action_value = self.fc1(T.cat([state, action], dim=1))
-        ## Than the activation of the action value
+        # - Than the activation of the action value
         action_value = F.relu(action_value)
 
         # Second layer feedforward and activation
@@ -73,12 +78,23 @@ class ValueNetwork(nn.Module):
     2 layer deep network ??
 
     The value network should receive a specific state and estimate the value of that state.
-    So, with these goal, we receive a action, pass is through a 2 layer network and then flat it into a value, that is the estimation.
+    So, with these goal, we receive a action, pass is through a 2 layer network and then flat it into
+    a value, that is the estimation.
 
     Notes:
-        - We don't need the number of actions here because the ValueNetwork just estimates the value for a specific state (or a set of states) so it doesn't care about the actions (took or are taken).
+        - We don't need the number of actions here because the ValueNetwork just estimates the value for a
+    specific state (or a set of states) so it doesn't care about the actions (took or are taken).
     """
-    def __init__(self, beta, input_dims, fc1_dims=256, fc2_dims=256, name='value', checkpoint_dir='tmp/sac'):
+
+    def __init__(
+        self,
+        beta,
+        input_dims,
+        fc1_dims=256,
+        fc2_dims=256,
+        name="value",
+        checkpoint_dir="tmp/sac",
+    ):
         super(ValueNetwork, self).__init__()
         self.input_dims = input_dims
         self.fc1_dims = fc1_dims
@@ -86,7 +102,7 @@ class ValueNetwork(nn.Module):
 
         self.name = name
         self.checkpoint_dir = checkpoint_dir
-        self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_sac')
+        self.checkpoint_file = os.path.join(self.checkpoint_dir, name + "_sac")
 
         # Defines the layers of the network as Linear layers
         self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
@@ -94,7 +110,7 @@ class ValueNetwork(nn.Module):
         self.v = nn.Linear(self.fc2_dims, 1)
 
         self.optimizer = optim.Adam(self.parameters(), lr=beta)
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
+        self.device = T.device("cuda:0" if T.cuda.is_available() else "cpu")
 
         self.to(self.device)
 
@@ -120,7 +136,17 @@ class ValueNetwork(nn.Module):
 
 
 class ActorNetwork(nn.Module):
-    def __init__(self, alpha, input_dims, max_action, fc1_dims=256, fc2_dims=256, n_actions=2, name='actor', checkpoint_dir='tmp/sac'):
+    def __init__(
+        self,
+        alpha,
+        input_dims,
+        max_action,
+        fc1_dims=256,
+        fc2_dims=256,
+        n_actions=2,
+        name="actor",
+        checkpoint_dir="tmp/sac",
+    ):
         super(ActorNetwork, self).__init__()
         self.input_dims = input_dims
         self.fc1_dims = fc1_dims
@@ -130,7 +156,7 @@ class ActorNetwork(nn.Module):
 
         self.name = name
         self.checkpoint_dir = checkpoint_dir
-        self.checkpoint_file = os.path.join(self.checkpoint_dir, name+'_sac')
+        self.checkpoint_file = os.path.join(self.checkpoint_dir, name + "_sac")
 
         # Reparameterization noise - substitute log(0) that is undefined
         self.reparam_noise = 1e-6
@@ -140,13 +166,13 @@ class ActorNetwork(nn.Module):
         self.fc2 = nn.Linear(self.fc1_dims, self.fc2_dims)
 
         # Results in two outputs:
-        ## MU = Mean of the distribution for a policy
+        # - MU = Mean of the distribution for a policy
         self.mu = nn.Linear(self.fc2_dims, self.n_actions)
-        ## SIGMA = Standard deviation
+        # - SIGMA = Standard deviation
         self.sigma = nn.Linear(self.fc2_dims, self.n_actions)
 
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
-        self.device = T.device('cuda:0' if T.cuda.is_available() else 'cpu')
+        self.device = T.device("cuda:0" if T.cuda.is_available() else "cpu")
 
         self.to(self.device)
 
@@ -161,8 +187,8 @@ class ActorNetwork(nn.Module):
         mu = self.mu(probability)
         sigma = self.sigma(probability)
 
-        # Clamp sigma to not reach any values, maintaining it inside a very small number (higher than zero bc of Pytorch) and 1
-        # This step is a faster way to do a sigmoid activation of the sigma output
+        # Clamp sigma to not reach any values, maintaining it inside a very small number (higher than zero
+        # bc of Pytorch) and 1. This step is a faster way to do a sigmoid activation of the sigma output
         sigma = T.clamp(sigma, min=self.reparam_noise, max=1)
 
         return mu, sigma
@@ -177,13 +203,13 @@ class ActorNetwork(nn.Module):
         else:
             actions = probabilities.sample()
 
-        action = T.tanh(actions)*T.tensor(self.max_action).to(self.device)
+        action = T.tanh(actions) * T.tensor(self.max_action).to(self.device)
 
         # Calculation of loss function - for updating the weights of the nn
         log_probability = probabilities.log_prob(actions)
-        ## Article appendix - Handle the scaling of the action (tanh)
-        log_probability -= T.log(1-action.pow(2)+self.reparam_noise)
-        ## Pytorch framework needs to return a scalar quantity for the loss
+        # - Article appendix - Handle the scaling of the action (tanh)
+        log_probability -= T.log(1 - action.pow(2) + self.reparam_noise)
+        # - Pytorch framework needs to return a scalar quantity for the loss
         log_probability = log_probability.sum(1, keepdim=True)
 
         return action, log_probability
