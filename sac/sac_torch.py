@@ -7,6 +7,46 @@ from sac.networks import ActorNetwork, CriticNetwork, ValueNetwork
 
 
 class SACAgent:
+    """
+    SAC (Soft Actor-Critic) is a model-free off-policy algorithm for continuous action spaces.
+    It combines the advantages of actor-critic methods and Monte Carlo tree search (MCTS) to find the optimal policy.
+
+    The algorithm consists of:
+    - An actor network that generates actions from states
+    - A critic network that evaluates the quality of the actions
+    - A value network that estimates the expected future rewards
+    - A target network that is used to compute the target values
+    - A replay buffer that stores the experiences
+    - A soft update rule that updates the target network
+    - A reward scaling factor that scales the rewards
+    - A batch size that determines the number of experiences to sample from the replay buffer
+    - A learning rate that determines the step size of the optimizer
+
+
+    The SAC algorithm is designed to:
+    - Optimize the policy by maximizing the expected future rewards
+    - Ensure that the policy is smooth and continuous
+    - Handle the exploration-exploitation trade-off
+    - Provide a probabilistic policy that can be sampled from
+    - Allow for efficient off-policy training
+
+    The parameters are:
+    - max_action: The maximum action value
+    - alpha: The learning rate for the actor network
+    - beta: The learning rate for the critic network
+    - input_dims: The dimensions of the input state
+    - gamma: The discount factor
+    - n_actions: The number of actions
+    - max_replay_buffer_size: The maximum size of the replay buffer
+    - tau: The soft update parameter
+    - layer1_size: The size of the first layer of the actor and critic networks
+    - layer2_size: The size of the second layer of the actor and critic networks
+    - batch_size: The number of experiences to sample from the replay buffer
+    - reward_scale: The scaling factor for the rewards
+
+
+    """
+
     def __init__(
         self,
         max_action,
@@ -28,6 +68,9 @@ class SACAgent:
         self.memory = ReplayBuffer(max_size=max_replay_buffer_size, input_shape=input_dims, n_actions=n_actions)
         self.batch_size = batch_size
         self.n_actions = n_actions
+
+        self.device = T.device("cuda:0" if T.cuda.is_available() else "cpu")
+        print(f"SAC factored using Device: {self.device}")
 
         self.actor = ActorNetwork(
             alpha,
@@ -116,7 +159,12 @@ class SACAgent:
         self.target_value.load_state_dict(value_state_dict)
 
     def save_models(self):
-        print(".... Saving models ....")
+        if self.memory.mem_cntr < self.batch_size:
+            print(
+                f"Skipping saving models due to insufficient memory. Memory size: {self.memory.mem_cntr}, Batch size: {self.batch_size}"
+            )
+            return
+
         self.actor.save_checkpoint()
         self.value.save_checkpoint()
         self.target_value.save_checkpoint()
@@ -133,6 +181,9 @@ class SACAgent:
     def learn(self):
         # Validate if we have at least the batch size on the memory, otherwise cancel learning step.
         if self.memory.mem_cntr < self.batch_size:
+            print(
+                f"Skipping learning step due to insufficient memory. Memory size: {self.memory.mem_cntr}, Batch size: {self.batch_size}"
+            )
             return
 
         state, action, reward, new_state, done = self.memory.sample_buffer(self.batch_size)

@@ -1,6 +1,7 @@
-# Folders with the weights
+# Folders with the training data
 tmp/
 plots/
+results/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
