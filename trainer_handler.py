@@ -18,6 +18,7 @@ class TrainingConfig:
         save_path: str = "results",
         render_mode: str = "rgb_array",
         load_checkpoint: bool = False,
+        debug_mode: bool = False,
     ):
         self.seeds = seeds
         self.episodes = episodes
@@ -25,6 +26,7 @@ class TrainingConfig:
         self.render_mode = render_mode
         self.load_checkpoint = load_checkpoint
         self.environment = environment
+        self.debug_mode = debug_mode
 
         self.check_environment()
 
@@ -68,8 +70,8 @@ class TrainerHandler:
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
-        torch.backends.cudnn.deterministic = True
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
 
     def save_training_artifacts(self, frames, score_history, episode_info, paths):
         """
@@ -140,15 +142,16 @@ class TrainerHandler:
                 n_actions=env.action_space.shape[0],
                 max_action=env.action_space.high,
                 checkpoint_dir=f"{self.base_path}/sac_weights",
-                alpha=0.001,
-                beta=0.001,
-                tau=0.001,
-                gamma=0.995,
-                reward_scale=10,
-                max_replay_buffer_size=1000000,
-                batch_size=256,
-                layer1_size=512,
-                layer2_size=512,
+                alpha=0.0005,
+                beta=0.0005,
+                # tau=0.001,
+                gamma=0.98,
+                reward_scale=0.5,
+                max_replay_buffer_size=config.episodes * 100,
+                batch_size=512,
+                layer1_size=256,
+                layer2_size=256,
+                debug_mode=config.debug_mode,
             )
 
             # Initialize the best score and score history
@@ -159,7 +162,7 @@ class TrainerHandler:
                 agent.load_models()
 
             # Train the agent for the given number of episodes
-            for i in range(config.episodes):
+            for i in range(round(config.episodes)):
                 # Reset the environment
                 observation, info = env.reset(seed=seed)
 
@@ -168,8 +171,11 @@ class TrainerHandler:
                 score = np.float32(0)
                 frames = []
 
+                step = 0
+                rewards_list = []
                 # Train the agent until the episode is done
                 while not done:
+                    step += 1
                     # Save the frame to generate a video later
                     if config.render_mode == "rgb_array":
                         rgb_array = np.array(env.render())
@@ -181,14 +187,21 @@ class TrainerHandler:
                     # Take the action and get the next observation, reward, done flag and info
                     next_observation, reward, terminated, truncated, info = env.step(action)
 
+                    # Append the reward to the rewards list
+                    rewards_list.append(reward)
+
                     # Update the score
                     score += np.float32(reward)
 
                     # Update the done flag
                     done = terminated or truncated
 
+                    # Define the times to remember - More than one for good experiences
+                    # Here, if the reward is greater than the medium of the rewards, we remember it 3 times
+                    times = 1 if reward < np.mean(rewards_list) else 3
+
                     # Remember the experience
-                    agent.remember(observation, action, reward, next_observation, done)
+                    agent.remember(observation, action, reward, next_observation, done, times=times)
 
                     # Learn if not loading a checkpoint
                     if not config.load_checkpoint:
@@ -211,24 +224,28 @@ class TrainerHandler:
 
                     # Save the models if not loading a checkpoint
                     if not config.load_checkpoint:
-                        agent.save_models()
+                        saved = agent.save_models()
 
-                        episode_info = {'episode': i, 'score': score, 'avg_score': avg_score}
-                        wrapper_info = info['episode']
+                        if not saved:
+                            print(f"[Episode {i}] Warning: Failed to save models\n")
+                        else:
 
-                        episode_info = {**episode_info, **wrapper_info}
-                        print(f"[Episode {i}] Saving models. Episode info: {episode_info}")
+                            episode_info = {'episode': i, 'score': score, 'avg_score': avg_score}
+                            wrapper_info = info['episode']
 
-                        # Save artifacts with error handling
-                        self.save_training_artifacts(
-                            frames if config.render_mode == "rgb_array" else None,
-                            score_history[: i + 1],
-                            episode_info,
-                            {
-                                'gif_path': gif_path,
-                                'figure_file': figure_file,
-                            },
-                        )
+                            episode_info = {**episode_info, **wrapper_info}
+                            print(f"[Episode {i}] Saving models. Episode info: {episode_info}")
+
+                            # Save artifacts with error handling
+                            self.save_training_artifacts(
+                                frames if config.render_mode == "rgb_array" else None,
+                                score_history[: i + 1],
+                                episode_info,
+                                {
+                                    'gif_path': gif_path,
+                                    'figure_file': figure_file,
+                                },
+                            )
 
             # Save final learning curve
             if not config.load_checkpoint:

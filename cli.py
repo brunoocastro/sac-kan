@@ -9,6 +9,7 @@ def parse_args():
     parser.add_argument("--train", action="store_true", help="Train the agent")
     parser.add_argument("--evaluate", action="store_true", help="Evaluate the agent")
     parser.add_argument("--render", action="store_true", help="Render the agent")
+    parser.add_argument("--debug", action="store_true", help="Debug mode")
     return parser.parse_args()
 
 
@@ -16,9 +17,12 @@ def main():
     args = parse_args()
     configs = get_configs()
 
-    if args.render:
-        for config in configs:
+    for config in configs:
+        if args.render:
             config.render_mode = "human"
+
+        if args.debug:
+            config.debug_mode = True
 
     if args.train:
         trainer = TrainerHandler(configs)

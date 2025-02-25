@@ -62,12 +62,14 @@ class SACAgent:
         batch_size=256,
         reward_scale=2,
         checkpoint_dir="tmp/sac",
+        debug_mode=False,
     ):
         self.gamma = gamma
         self.tau = tau
         self.memory = ReplayBuffer(max_size=max_replay_buffer_size, input_shape=input_dims, n_actions=n_actions)
         self.batch_size = batch_size
         self.n_actions = n_actions
+        self.debug_mode = debug_mode
 
         self.device = T.device("cuda:0" if T.cuda.is_available() else "cpu")
         print(f"SAC factored using Device: {self.device}")
@@ -126,8 +128,27 @@ class SACAgent:
 
         return actions.cpu().detach().numpy()[0]
 
-    def remember(self, state, action, reward, new_state, done):
-        self.memory.store_transition(state, action, reward, new_state, done)
+    def remember(self, state, action, reward, new_state, done, times=1):
+        """
+        Stores the experience in the replay buffer.
+
+        Parameters:
+            state: np.ndarray
+                The current state of the environment.
+            action: np.ndarray
+                The action taken in the current state.
+            reward: float
+                The reward received for taking the action.
+            new_state: np.ndarray
+                The new state of the environment after taking the action.
+            done: bool
+                A boolean flag indicating if the episode is over.
+            times: int
+                The number of times to store the experience in the replay buffer. Can be used to store multiple
+                experiences at once. Defaults to 1. Could be useful for storing multiple good experiences at once.
+        """
+        for _ in range(times):
+            self.memory.store_transition(state, action, reward, new_state, done)
 
     def update_network_parameters(self, tau=None):
         """
@@ -160,10 +181,11 @@ class SACAgent:
 
     def save_models(self):
         if self.memory.mem_cntr < self.batch_size:
-            print(
-                f"Skipping saving models due to insufficient memory. Memory size: {self.memory.mem_cntr}, Batch size: {self.batch_size}"
-            )
-            return
+            if self.debug_mode:
+                print(
+                    f"Skipping saving models due to insufficient memory. Memory size: {self.memory.mem_cntr}, Batch size: {self.batch_size}"
+                )
+            return False
 
         self.actor.save_checkpoint()
         self.value.save_checkpoint()
@@ -181,9 +203,10 @@ class SACAgent:
     def learn(self):
         # Validate if we have at least the batch size on the memory, otherwise cancel learning step.
         if self.memory.mem_cntr < self.batch_size:
-            print(
-                f"Skipping learning step due to insufficient memory. Memory size: {self.memory.mem_cntr}, Batch size: {self.batch_size}"
-            )
+            if self.debug_mode:
+                print(
+                    f"Skipping learning step due to insufficient memory. Memory size: {self.memory.mem_cntr}, Batch size: {self.batch_size}"
+                )
             return
 
         state, action, reward, new_state, done = self.memory.sample_buffer(self.batch_size)
@@ -194,6 +217,21 @@ class SACAgent:
         reward = T.tensor(reward, dtype=T.float).to(self.actor.device)  # all network devices is the same
         state_ = T.tensor(new_state, dtype=T.float).to(self.actor.device)
         done = T.tensor(done).to(self.actor.device)
+        # If any of tensors are "nan", stop the entire process to debug
+        if (
+            state.isnan().any()
+            or action.isnan().any()
+            or reward.isnan().any()
+            or state_.isnan().any()
+            or done.isnan().any()  # noqa
+        ):
+            print("[LEARN] Found NaN values on tensors. Stopping the process to debug.")
+            print(f"[LEARN] state: {state}")
+            print(f"[LEARN] action: {action}")
+            print(f"[LEARN] reward: {reward}")
+            print(f"[LEARN] state_: {state_}")
+            print(f"[LEARN] done: {done}")
+            exit(1)
 
         # Calculate the values of the states and new_states according to the valueNetwork and targetValueNetwork
         value = self.value(state).view(-1)  # Claps as batch_dim
@@ -203,6 +241,10 @@ class SACAgent:
         actions, log_probs = self.actor.sample_normal(state, reparameterize=False)
         log_probs = log_probs.view(-1)
 
+        if self.debug_mode:
+            # print(f"[LEARN] Actions: {actions}")
+            print(f"[LEARN] Probs: {log_probs}")
+
         q1_new_policy = self.critic_1.forward(state, action)
         q2_new_policy = self.critic_2.forward(state, action)
 
@@ -211,12 +253,26 @@ class SACAgent:
         critic_value = T.min(q1_new_policy, q2_new_policy)
         critic_value = critic_value.view(-1)  # Claps batch_dim
 
+        if q1_new_policy.isnan().any() or q2_new_policy.isnan().any() or critic_value.isnan().any():
+            print("[LEARN] Found NaN values on critic values. Stopping the process to debug.")
+            print(f"[LEARN] q1_new_policy: {q1_new_policy}")
+            print(f"[LEARN] q2_new_policy: {q2_new_policy}")
+            print(f"[LEARN] critic_value: {critic_value}")
+            exit(1)
+
         # Calculate Value Network loss and backpropagate
         self.value.optimizer.zero_grad()
         value_target = critic_value - log_probs
         value_loss = 0.5 * F.mse_loss(value, value_target)
         value_loss.backward(retain_graph=True)
         self.value.optimizer.step()
+
+        if value.isnan().any() or value_target.isnan().any() or value_loss.isnan().any():
+            print("[LEARN] Found NaN values on value loss. Stopping the process to debug.")
+            print(f"[LEARN] value: {value}")
+            print(f"[LEARN] value_target: {value_target}")
+            print(f"[LEARN] value_loss: {value_loss}")
+            exit(1)
 
         # Calculate Actor Network loss and backpropagate
         actions, log_probs = self.actor.sample_normal(state, reparameterize=True)
@@ -226,11 +282,22 @@ class SACAgent:
         critic_value = T.min(q1_new_policy, q2_new_policy)
         critic_value = critic_value.view(-1)  # Claps batch_dim
 
+        if log_probs.isnan().any() or critic_value.isnan().any():
+            print("[LEARN] Found NaN values on actor values. Stopping the process to debug.")
+            print(f"[LEARN] log_probs: {log_probs}")
+            print(f"[LEARN] critic_value: {critic_value}")
+            exit
+
         actor_loss = log_probs - critic_value
         actor_loss = T.mean(actor_loss)
         self.actor.optimizer.zero_grad()
         actor_loss.backward(retain_graph=True)
         self.actor.optimizer.step()
+
+        if actor_loss.isnan().any():
+            print("[LEARN] Found NaN values on actor loss. Stopping the process to debug.")
+            print(f"[LEARN] actor_loss: {actor_loss}")
+            exit(1)
 
         # Deal with critic loss
         self.critic_1.optimizer.zero_grad()
@@ -245,5 +312,24 @@ class SACAgent:
         critic_loss.backward()
         self.critic_1.optimizer.step()
         self.critic_2.optimizer.step()
+
+        if critic1_loss.isnan().any() or critic2_loss.isnan().any() or critic_loss.isnan().any():
+            print("[LEARN] Found NaN values on critic loss. Stopping the process to debug.")
+            print(f"[LEARN] critic1_loss: {critic1_loss}")
+            print(f"[LEARN] critic2_loss: {critic2_loss}")
+            print(f"[LEARN] critic_loss: {critic_loss}")
+            exit(1)
+
+        if self.debug_mode:
+            print(f"[LEARN] value_loss: {value_loss}")
+            print(f"[LEARN] value_target: {value_target}")
+            print(f"[LEARN] critic_value: {critic_value}")
+            print(f"[LEARN] critic1_loss: {critic1_loss}")
+            print(f"[LEARN] critic2_loss: {critic2_loss}")
+            print(f"[LEARN] critic_loss: {critic_loss}")
+            print(f"[LEARN] actor_loss: {actor_loss}")
+            print(f"[LEARN] q_hat: {q_hat}")
+            print(f"[LEARN] q1_old_policy: {q1_old_policy}")
+            print(f"[LEARN] q2_old_policy: {q2_old_policy}")
 
         self.update_network_parameters()

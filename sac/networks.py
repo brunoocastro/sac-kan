@@ -146,6 +146,7 @@ class ActorNetwork(nn.Module):
         n_actions=2,
         name="actor",
         checkpoint_dir="tmp/sac",
+        debug_mode=False,
     ):
         super(ActorNetwork, self).__init__()
         self.input_dims = input_dims
@@ -153,13 +154,14 @@ class ActorNetwork(nn.Module):
         self.fc2_dims = fc2_dims
         self.n_actions = n_actions
         self.max_action = max_action
+        self.debug_mode = debug_mode
 
         self.name = name
         self.checkpoint_dir = checkpoint_dir
         self.checkpoint_file = os.path.join(self.checkpoint_dir, name + "_sac")
 
         # Reparameterization noise - substitute log(0) that is undefined
-        self.reparam_noise = 1e-6
+        self.reparam_noise = 1e-9
 
         # Define the Deep Neural Network
         self.fc1 = nn.Linear(*self.input_dims, self.fc1_dims)
@@ -203,14 +205,27 @@ class ActorNetwork(nn.Module):
         else:
             actions = probabilities.sample()
 
-        action = T.tanh(actions) * T.tensor(self.max_action).to(self.device)
+        # ISSO AQUI CAGOU ELE NEM EXPLORA MAIS VAI PRA 2 DIRETO
+        # Get "non scaled" actions with tanh activation to be between -1 and 1 (avoiding nan's at the log)
+        tanh_actions = T.tanh(actions)
+
+        action = tanh_actions * T.tensor(self.max_action).to(self.device)
 
         # Calculation of loss function - for updating the weights of the nn
-        log_probability = probabilities.log_prob(actions)
+        log_probability = probabilities.log_prob(tanh_actions)
+
         # - Article appendix - Handle the scaling of the action (tanh)
-        log_probability -= T.log(1 - action.pow(2) + self.reparam_noise)
+        log_probability -= T.log(1 - tanh_actions.pow(2) + self.reparam_noise)
+
         # - Pytorch framework needs to return a scalar quantity for the loss
         log_probability = log_probability.sum(1, keepdim=True)
+
+        if self.debug_mode:
+            print("[ACTOR] mu: ", mu)
+            print("[ACTOR] sigma: ", sigma)
+            print("[ACTOR] actions: ", actions)
+            print("[ACTOR] action: ", action)
+            print("[ACTOR] log_probability: ", log_probability)
 
         return action, log_probability
 
