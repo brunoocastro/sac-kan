@@ -4,4 +4,4 @@ lint:
 	flake8 . --config=setup.cfg
 
 setup:
-	scripts/local_setup.sh
+	scripts/setup.sh

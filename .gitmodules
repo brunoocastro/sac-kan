@@ -1,0 +1,6 @@
+[submodule "cleanrl"]
+	path = cleanrl
+	url = https://github.com/vwxyzjn/cleanrl
+[submodule "pykan"]
+	path = pykan
+	url = https://github.com/KindXiaoming/pykan
