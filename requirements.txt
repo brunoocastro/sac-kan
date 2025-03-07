@@ -2,6 +2,9 @@
 torch
 numpy
 
+# KAN library
+pykan
+
 # Reinforcement learning
 gymnasium
 gymnasium[mujoco] # Environment for reinforcement learning
