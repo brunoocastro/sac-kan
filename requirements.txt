@@ -5,8 +5,15 @@ numpy
 # Reinforcement learning
 gymnasium
 gymnasium[mujoco] # Environment for reinforcement learning
+gymnasium[other] 
 
 # CleanRL dependencies
 tyro
 stable_baselines3
 tensorboard
+wandb
+
+# Linting
+ruff
+black
+isort
