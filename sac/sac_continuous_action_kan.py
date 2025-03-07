@@ -14,6 +14,8 @@ import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 
+from pykan.kan import KAN
+
 
 @dataclass
 class Args:
@@ -89,6 +91,31 @@ class SoftQNetwork(nn.Module):
         )
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, 1)
+
+    def forward(self, x, a):
+        x = torch.cat([x, a], 1)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
+
+
+# ALGO LOGIC: initialize agent here:
+class SoftKANNetwork(nn.Module):
+    def __init__(self, env):
+        super().__init__()
+
+        k = 2
+        g = 3
+
+        self.fc1 = KAN(
+            width=[np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), 256],
+            grid=g,
+            k=k,
+            device='cpu',
+        )
+        self.fc2 = KAN(width=[256, 256], grid=g, k=k, device='cpu')
+        self.fc3 = KAN(width=[256, 1], grid=g, k=k, device='cpu')
 
     def forward(self, x, a):
         x = torch.cat([x, a], 1)
@@ -197,8 +224,8 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     max_action = float(envs.single_action_space.high[0])
 
     actor = Actor(envs).to(device)
-    qf1 = SoftQNetwork(envs).to(device)
-    qf2 = SoftQNetwork(envs).to(device)
+    qf1 = SoftKANNetwork(envs).to(device)
+    qf2 = SoftKANNetwork(envs).to(device)
     qf1_target = SoftQNetwork(envs).to(device)
     qf2_target = SoftQNetwork(envs).to(device)
     qf1_target.load_state_dict(qf1.state_dict())
