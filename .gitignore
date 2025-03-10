@@ -2,6 +2,7 @@
 wandb/
 videos/
 runs/
+model/
 
 # Folders with the training data
 tmp/

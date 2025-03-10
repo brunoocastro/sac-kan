@@ -7,3 +7,29 @@ skip-string-normalization = true
 profile = 'black'
 default_section = 'THIRDPARTY'
 line_length = 119
+
+[project]
+name = "sac-kan"
+version = "0.1.0"
+description = "SAC implemmentation with a KAN layer"
+authors = [
+    {name = "Bruno Castro (Tone)",email = "bruno.castro@capyba.com"}
+]
+readme = "README.md"
+keywords = ["reinforcement-learning", "kan", "sac"]
+requires-python = ">=3.10"
+dependencies = [
+    "ruff (>=0.9.10,<0.10.0)",
+    "black (>=25.1.0,<26.0.0)",
+    "isort (>=6.0.1,<7.0.0)",
+    "gymnasium (>=1.1.1,<2.0.0)",
+    "pykan (>=0.2.8,<0.3.0)",
+    "torch (>=2.6.0,<3.0.0)"
+]
+packages = [
+    {include = "sac_kan"}
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

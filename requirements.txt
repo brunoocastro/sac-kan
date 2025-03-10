@@ -5,11 +5,6 @@ numpy
 # KAN library
 pykan
 
-# Reinforcement learning
-gymnasium
-gymnasium[mujoco] # Environment for reinforcement learning
-gymnasium[other] 
-
 # CleanRL dependencies
 tyro
 stable_baselines3
@@ -20,3 +15,8 @@ wandb
 ruff
 black
 isort
+
+# Reinforcement learning
+gymnasium
+gymnasium[mujoco] # Environment for reinforcement learning
+gymnasium[other] 

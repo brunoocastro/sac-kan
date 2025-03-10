@@ -102,27 +102,102 @@ class SoftQNetwork(nn.Module):
 
 # ALGO LOGIC: initialize agent here:
 class SoftKANNetwork(nn.Module):
-    def __init__(self, env):
+    def __init__(self, env, k=3, g=3, kan_layer_size=8, name="SoftKANN"):
         super().__init__()
+        self.k = k
+        self.g = g
 
-        k = 2
-        g = 3
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Input size of Q network is the size of the observation space plus the size of the action space
+        input_size = np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape)
+
+        print(f"[KAN] Initializing KAN network {name} on device {self.device}")
+        print(f"[KAN] Input layer size: {input_size}")
+        print("[KAN] Output layer size: 1 (value)")
+        print(f"[KAN] Grid size: {g}")
+        print(f"[KAN] K: {k}")
+        print(f"[KAN] Width: {input_size} -> {kan_layer_size} -> 1")
 
         self.fc1 = KAN(
-            width=[np.array(env.single_observation_space.shape).prod() + np.prod(env.single_action_space.shape), 256],
+            width=[input_size, kan_layer_size, 1],
             grid=g,
             k=k,
-            device='cpu',
+            ckpt_path=f"{name}/fc1_ckpt",
+            device=self.device,
         )
-        self.fc2 = KAN(width=[256, 256], grid=g, k=k, device='cpu')
-        self.fc3 = KAN(width=[256, 1], grid=g, k=k, device='cpu')
+        # self.fc2 = KAN(width=[kan_layer_size, 1], grid=g, k=k, ckpt_path=f"{name}/fc2_ckpt", device=self.device)
+        # # self.fc3 = KAN(
+        # #     width=[256, 1],
+        # #     grid=g,
+        # #     k=k,
+        # # )
+
+        self.fc1.speed()
+        # self.fc2.speed()
+        # self.fc3.speed()
 
     def forward(self, x, a):
+        print(f"[KAN] Input shape: {x.shape}")
+        print(f"[KAN] Action shape: {a.shape}")
+
+        print(f"[KAN] Input: {x}")
         x = torch.cat([x, a], 1)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
+        print(f"[KAN] Concatenated input: {x}")
+        x = F.relu(self.fc1.forward(x))
+        print(f"[KAN] Hidden layer shape: {x.shape}")
+        # print(f"[KAN] Hidden layer: {x}")
+        # x = F.relu(self.fc2.forward(x))
+        print(f"[KAN] Hidden layer shape: {x.shape}")
+        # print(f"[KAN] Hidden layer: {x}")
+        x = self.fc1.forward(x)
+        print(f"[KAN] Output shape: {x.shape}")
+        # print(f"[KAN] Output: {x}")
+
         return x
+
+    def to(self, device):
+        print(f"[KAN] Moving to device: {device}")
+        self.fc1.to(device)
+        # self.fc2.to(device)
+        # self.fc3.device(device)
+        return self
+
+
+class KANCritic(nn.Module):
+    def __init__(self, env, k=3, g=4, kan_layer_size=64, name="KANCritic"):
+        super().__init__()
+
+        # Obter dimensões de entrada
+        state_dims = np.array(env.single_observation_space.shape).prod()
+        action_dims = np.prod(env.single_action_space.shape)
+        input_size = state_dims + action_dims
+
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        # Criar rede KAN para a função Q
+        self.q_net = KAN(
+            width=[input_size, kan_layer_size, 1],  # [input -> hidden -> output]
+            grid=g,
+            k=k,
+            device=self.device,
+            ckpt_path=f"{name}/q_net_ckpt",
+        )
+
+        self.q_net.speed()  # Otimização para inferência
+
+    def forward(self, state, action):
+        # Concatenar estado e ação
+        x = torch.cat([state, action], dim=1)
+
+        # Passar pela rede KAN
+        q_value = self.q_net.forward(x)
+
+        return q_value
+
+    def to(self, device):
+        self.q_net.to(device)
+        return self
 
 
 LOG_STD_MAX = 2
@@ -224,10 +299,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     max_action = float(envs.single_action_space.high[0])
 
     actor = Actor(envs).to(device)
-    qf1 = SoftKANNetwork(envs).to(device)
-    qf2 = SoftKANNetwork(envs).to(device)
-    qf1_target = SoftQNetwork(envs).to(device)
-    qf2_target = SoftQNetwork(envs).to(device)
+    qf1 = KANCritic(envs, name="model/qf1").to(device)
+    qf2 = KANCritic(envs, name="model/qf2").to(device)
+    qf1_target = KANCritic(envs, name="model/qf1_target").to(device)
+    qf2_target = KANCritic(envs, name="model/qf2_target").to(device)
     qf1_target.load_state_dict(qf1.state_dict())
     qf2_target.load_state_dict(qf2.state_dict())
     q_optimizer = optim.Adam(list(qf1.parameters()) + list(qf2.parameters()), lr=args.q_lr)
