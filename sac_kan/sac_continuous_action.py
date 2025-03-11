@@ -252,7 +252,10 @@ poetry run pip install "stable_baselines3==2.0.0a1"
         real_next_obs = next_obs.copy()
         for idx, trunc in enumerate(truncations):
             if trunc:
-                real_next_obs[idx] = infos["final_observation"][idx]
+                print(f"info: {infos}")
+                print(f"obs: {obs}")
+                # real_next_obs[idx] = infos["final_observation"][idx]
+                print(f"real_next_obs: {real_next_obs}")
         rb.add(obs, real_next_obs, actions, rewards, terminations, infos)
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
